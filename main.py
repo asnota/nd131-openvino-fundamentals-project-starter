@@ -33,6 +33,12 @@ import paho.mqtt.client as mqtt
 from argparse import ArgumentParser
 from inference import Network
 
+# Variables
+CPU_EXTENSION = "/opt/intel/openvino/deployment_tools/inference_engine/lib/intel64/libcpu_extension_sse4.so"
+# SDD_MODEL = "/home/workspace/ssd_mobilenet_v1_coco_2018_01_28/frozen_inference_graph.xml"
+SDD_MODEL = "/home/workspace/ssd_mobilenet_v2_coco_2018_03_29/frozen_inference_graph.xml"
+
+
 # MQTT server environment variables
 HOSTNAME = socket.gethostname()
 IPADDRESS = socket.gethostbyname(HOSTNAME)
@@ -48,7 +54,7 @@ def build_argparser():
     :return: command line arguments
     """
     parser = ArgumentParser()
-    parser.add_argument("-m", "--model", required=True, type=str,
+    parser.add_argument("-m", "--model", required=False, type=str,
                         help="Path to an xml file with a trained model.")
     parser.add_argument("-i", "--input", required=True, type=str,
                         help="Path to image or video file")
@@ -70,12 +76,12 @@ def build_argparser():
 
 def connect_mqtt():
     ### TODO: Connect to the MQTT client ###
-    client = None
-
+    client = mqtt.Client()
+	client.connect(MQTT_HOST, MQTT_PORT, MQTT_KEEPALIVE_INTERVAL)
     return client
 
 
-def infer_on_stream(args, client):
+def infer_on_stream(model, args, client):
     """
     Initialize the inference network, stream video to network,
     and output stats and video.
@@ -84,37 +90,73 @@ def infer_on_stream(args, client):
     :param client: MQTT client
     :return: None
     """
-    # Initialise the class
+    # Initialise the class (Inference engine)
     infer_network = Network()
+	
     # Set Probability threshold for detections
     prob_threshold = args.prob_threshold
 
-    ### TODO: Load the model through `infer_network` ###
+    ### TODO: Load the model through `infer_network` into IE ###
+	infer_network.load_model(model, args.device, CPU_EXTENSION)
+	net_input_shape = infer_network.get_input_shape()
 
     ### TODO: Handle the input stream ###
+	# Get and open ideo capture
+	cap = cv2.VideoCapture(args.input)
+	cap.open(args.input)
+	
+	#Grab the shape of the input
+	width = int(cap.get(3))
+	height = int(cap.get(4))
 
     ### TODO: Loop until stream is over ###
-
+	while cap.isOpened():
         ### TODO: Read from the video capture ###
+		flag, frame = cap.read()
+		if not flag:
+			break
+		key_pressed = cv2.waitKey(60)
 
         ### TODO: Pre-process the image as needed ###
+		p_frame = cv2.resize(frame, (net_input_shape[2], net_input_shape[3]))
+		p_frame = p_frame.transpose((2,0,1))
+		p_frame = p_frame.reshape(1, *p_frame.shape)
 
         ### TODO: Start asynchronous inference for specified request ###
+		infer_network.exec_net(p_frame)
 
         ### TODO: Wait for the result ###
-
+		if infer_network.wait == 0:
+			
             ### TODO: Get the results of the inference request ###
+			result = infer_network.get_output
 
             ### TODO: Extract any desired stats from the results ###
+			# Dummy vars
+			current_count = 3
+			total_count = 5
+			duration = randint(50,70)			
 
             ### TODO: Calculate and send relevant information on ###
             ### current_count, total_count and duration to the MQTT server ###
             ### Topic "person": keys of "count" and "total" ###
             ### Topic "person/duration": key of "duration" ###
+			client.publish("person", json.dumps({"count": current_count}), json.dumps({"total": total_count}))
+			client.publish("person/duration", json.dumps({"duration": duration}))
 
         ### TODO: Send the frame to the FFMPEG server ###
+		sys.stdout.buffer.write(frame)
+		sys.stdout.flush()
+		
+		if key_pressed == 27:
+			break
 
         ### TODO: Write an output image if `single_image_mode` ###
+		
+	# Release the capture and destroy any OpenCV windows
+    cap.release()
+    cv2.destroyAllWindows()    
+    client.disconnect()	
 
 
 def main():
@@ -128,7 +170,8 @@ def main():
     # Connect to the MQTT server
     client = connect_mqtt()
     # Perform inference on the input stream
-    infer_on_stream(args, client)
+	model = SDD_MODEL
+    infer_on_stream(model, args, client)
 
 
 if __name__ == '__main__':
