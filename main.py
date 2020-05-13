@@ -37,7 +37,7 @@ from inference import Network
 CPU_EXTENSION = "/opt/intel/openvino/deployment_tools/inference_engine/lib/intel64/libcpu_extension_sse4.so"
 # SDD_MODEL = "/home/workspace/ssd_mobilenet_v1_coco_2018_01_28/frozen_inference_graph.xml"
 SDD_MODEL = "/home/workspace/ssd_mobilenet_v2_coco_2018_03_29/frozen_inference_graph.xml"
-
+VIDEO_PATH = "resources/Pedestrian_Detect_2_1_1.mp4"
 
 # MQTT server environment variables
 HOSTNAME = socket.gethostname()
@@ -55,11 +55,13 @@ def build_argparser():
     """
     parser = ArgumentParser()
     parser.add_argument("-m", "--model", required=False, type=str,
-                        help="Path to an xml file with a trained model.")
-    parser.add_argument("-i", "--input", required=True, type=str,
-                        help="Path to image or video file")
+                        default=SDD_MODEL,
+						help="Path to an xml file with a trained model.")
+    parser.add_argument("-i", "--input", required=False, type=str,
+                        default=VIDEO_PATH
+						help="Path to image or video file")
     parser.add_argument("-l", "--cpu_extension", required=False, type=str,
-                        default=None,
+                        default=CPU_EXTENSION,
                         help="MKLDNN (CPU)-targeted custom layers."
                              "Absolute path to a shared library with the"
                              "kernels impl.")
@@ -97,10 +99,21 @@ def infer_on_stream(model, args, client):
     prob_threshold = args.prob_threshold
 
     ### TODO: Load the model through `infer_network` into IE ###
-	infer_network.load_model(model, args.device, CPU_EXTENSION)
+	infer_network.load_model(model, args.device, args.cpu_extension)
 	net_input_shape = infer_network.get_input_shape()
 
-    ### TODO: Handle the input stream ###
+    ### TODO: Handle the input_stream ###
+	if args.input == 'CAM':
+		input_stream = 0
+		single_image = False
+	elif args.input.endswith('.jpg') or args.input.endswith('.bmp'):
+		input_stream = args.input
+		singe_image = True
+	else:
+		input_stream = args.input
+		single_image = False
+		assert os.path.isfile(input_stream), "file does not exist"
+				
 	# Get and open ideo capture
 	cap = cv2.VideoCapture(args.input)
 	cap.open(args.input)
@@ -118,7 +131,7 @@ def infer_on_stream(model, args, client):
 		key_pressed = cv2.waitKey(60)
 
         ### TODO: Pre-process the image as needed ###
-		p_frame = cv2.resize(frame, (net_input_shape[2], net_input_shape[3]))
+		p_frame = cv2.resize(frame, (net_input_shape[3], net_input_shape[2]))
 		p_frame = p_frame.transpose((2,0,1))
 		p_frame = p_frame.reshape(1, *p_frame.shape)
 
@@ -126,7 +139,7 @@ def infer_on_stream(model, args, client):
 		infer_network.exec_net(p_frame)
 
         ### TODO: Wait for the result ###
-		if infer_network.wait == 0:
+		if infer_network.wait() == 0:
 			
             ### TODO: Get the results of the inference request ###
 			result = infer_network.get_output
@@ -170,7 +183,7 @@ def main():
     # Connect to the MQTT server
     client = connect_mqtt()
     # Perform inference on the input stream
-	model = SDD_MODEL
+	model = args.model
     infer_on_stream(model, args, client)
 
 
