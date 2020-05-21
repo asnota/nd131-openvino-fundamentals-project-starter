@@ -81,6 +81,18 @@ def connect_mqtt():
     client = mqtt.Client()
 	client.connect(MQTT_HOST, MQTT_PORT, MQTT_KEEPALIVE_INTERVAL)
     return client
+	
+def ssd_output(frame, result):
+    current_count = 0
+    for obj in result[0][0]:
+        if obj[2] > prob_threshold:
+            xmin = int(obj[3] * initial_width)
+            ymin = int(obj[4] * initial_hight)
+            xmax = int(obj[5] * initial_width)
+            ymax = int(obj[6] * initial_hight)
+            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 55, 255), 1)
+            current_count = current_count + 1
+    return frame, current_count
 
 
 def infer_on_stream(model, args, client):
@@ -92,35 +104,46 @@ def infer_on_stream(model, args, client):
     :param client: MQTT client
     :return: None
     """
+	# Flag for a single image input
+    single_image = False
+    
+    # Initialize variables for person count and start time
+    last_count = 0
+    total_count = 0
+    start_time = 0
+    
+    # Declare global vars for intial frame's width and hight, along with probability threshold
+    global initial_width, initial_hight, prob_threshold
+	
+	# Set Probability threshold for detections
+    prob_threshold = args.prob_threshold
+	
     # Initialise the class (Inference engine)
     infer_network = Network()
 	
-    # Set Probability threshold for detections
-    prob_threshold = args.prob_threshold
-
     ### TODO: Load the model through `infer_network` into IE ###
 	infer_network.load_model(model, args.device, args.cpu_extension)
-	net_input_shape = infer_network.get_input_shape()
+	net_input_shape = infer_network.get_input_shape() # Input shape is  [1, 3, 300, 300]
 
     ### TODO: Handle the input_stream ###
 	if args.input == 'CAM':
-		input_stream = 0
-		single_image = False
-	elif args.input.endswith('.jpg') or args.input.endswith('.bmp'):
-		input_stream = args.input
+		input_stream = 0		
+	elif args.input.endswith('.bmp'):
 		singe_image = True
+		input_stream = args.input		
 	else:
-		input_stream = args.input
-		single_image = False
-		assert os.path.isfile(input_stream), "file does not exist"
+		input_stream = args.input		
+		assert os.path.isfile(input_stream), "Input file does not exist"
 				
 	# Get and open ideo capture
 	cap = cv2.VideoCapture(args.input)
-	cap.open(args.input)
 	
-	#Grab the shape of the input
-	width = int(cap.get(3))
-	height = int(cap.get(4))
+	if input_stream:
+		cap.open(args.input)
+	
+		#Grab the shape of the input
+		initail_width = int(cap.get(3)) # Video width is 768
+		initial_height = int(cap.get(4)) # Video height is 432
 
     ### TODO: Loop until stream is over ###
 	while cap.isOpened():
@@ -143,20 +166,39 @@ def infer_on_stream(model, args, client):
 			
             ### TODO: Get the results of the inference request ###
 			result = infer_network.get_output
+			
+			# Apply a function to draw the boxes
+            frame, current_count = ssd_output(frame, result)
 
             ### TODO: Extract any desired stats from the results ###
-			# Dummy vars
-			current_count = 3
-			total_count = 5
-			duration = randint(50,70)			
-
-            ### TODO: Calculate and send relevant information on ###
+			### TODO: Calculate and send relevant information on ###
             ### current_count, total_count and duration to the MQTT server ###
-            ### Topic "person": keys of "count" and "total" ###
-            ### Topic "person/duration": key of "duration" ###
-			client.publish("person", json.dumps({"count": current_count}), json.dumps({"total": total_count}))
-			client.publish("person/duration", json.dumps({"duration": duration}))
+            # A new person appears in a frame
+            if current_count > last_count:
+                
+                # Get a time when a new person appears
+                start_time = time.time()
+                
+                # Update total count of persons 
+                total_count = total_count + current_count - last_count
+                
+                ### Topic "person": key of "total" (from "total" and "count") ###
+                client.publish("person", json.dumps({"total": total_count}))
 
+            # Duration of the person presence
+            if current_count < last_count:
+                # Substract a first moment a new person appeared from current time to get duration of the person presence in a frame
+                duration = int(time.time() - start_time)
+                
+                ### Topic "person/duration": key of "duration" ###
+                client.publish("person/duration", json.dumps({"duration": duration}))
+             
+            ### Topic "person": key of "count" (from "total" and "count") ###
+            client.publish("person", json.dumps({"count": current_count}))
+            
+            # Update the persons count 
+            last_count = current_count
+			
         ### TODO: Send the frame to the FFMPEG server ###
 		sys.stdout.buffer.write(frame)
 		sys.stdout.flush()
@@ -165,6 +207,8 @@ def infer_on_stream(model, args, client):
 			break
 
         ### TODO: Write an output image if `single_image_mode` ###
+		if single_image:
+            cv2.imwrite('resources/output_image.png', frame)
 		
 	# Release the capture and destroy any OpenCV windows
     cap.release()
@@ -180,9 +224,11 @@ def main():
     """
     # Grab command line args
     args = build_argparser().parse_args()
-    # Connect to the MQTT server
+    
+	# Connect to the MQTT server
     client = connect_mqtt()
-    # Perform inference on the input stream
+    
+	# Perform inference on the input stream
 	model = args.model
     infer_on_stream(model, args, client)
 
