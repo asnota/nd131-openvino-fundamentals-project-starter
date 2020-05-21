@@ -1,59 +1,48 @@
 # Project Write-Up
 
-You can use this document as a template for providing your project write-up. However, if you
-have a different format you prefer, feel free to use it as long as you answer all required
-questions.
+## 1. Explaining Custom Layers in OpenVINO™
 
-## Explaining Custom Layers
+Model Optimizer iterates through each layer of the input model and compares it to the list of known layers before building the IR (Intermediate Representation).
+Each DL framework contains its own list of layers supported by OpenVino. 
+If the layer is not supported, it is considered a custom layer by Model Optimizer.
+The reason for a custom layer application might be a special mathemacal calculation contained in this layer, not available or heavy to achieve ith standard layers.
+The conversion of custom layers differs regarding the framework of the input model. 
+Let't focus on the process behind converting custom layers from TensorFlow (a framework of the input model from a current project).
 
-The process behind converting custom layers involves...
+There is three options for TensorFlow models with custom layers:
 
-Some of the potential reasons for handling custom layers are...
+1) Registering those layers as extensions to the Model Optimizer. 
+In this case, the Model Optimizer generates a valid and optimized IR.
 
-## Comparing Model Performance
+2) For sub-graphs that should not be expressed with the analogous sub-graph in the IR, but another sub-graph, the Model Optimizer provides such an option. 
+This feature is helpful for many TensorFlow models.
 
-My method(s) to compare models before and after conversion to Intermediate Representations
-were...
+3) Experimental feature of registering definite sub-graphs of the model as those that should be offloaded to TensorFlow during inference. 
+In this case, the Model Optimizer produces an Intermediate Representation that:
 
-The difference between model accuracy pre- and post-conversion was...
+-Can be inferred only on CPU
+-Reflects each sub-graph as a single custom layer in the IR
+-It is designed only for the model with complex structure. In this case, the complex subgraphs are offloaded to TensorFlow to make sure that Model Optimizer and Inference Engine can successfully execute your model.
+However, for each such subgraph, TensorFlow library is called that is not optimized for inference.
+Then, the replacement of each subgraph begins with extension and a removal of its offloading to TensorFlow during inference until all the models are converted by Model Optimizer and inferred by Inference Engine only with the maximum performance.
+ 
 
-The size of the model pre- and post-conversion was...
+## 2. Compare Model Performance
 
-The inference time of the model pre- and post-conversion was...
+The SSD model used in this project might be run outside of the OpenVINO™ toolkit (https://github.com/tensorflow/models/blob/master/research/object_detection/object_detection_tutorial.ipynb)
+However for each inference a remote service, which hosts the model, must be requested at each single input, and each request inccur charges, either from per entry cloud charges or the price for maintaining the web endpoint.
+The advantage throught the OpenVINO™ toolkit inference is not only in cutting of the costs related to a heavy web requests-based implementation, but also in a model speed.
+By passing throught the Model Optimizer, the model might loose in accuracy, but gains in speed and CPU overload, which is crucial for IoT devices lacking the multiple GPUs and short in memory space.
 
-## Assess Model Use Cases
 
-Some of the potential use cases of the people counter app are...
+## 3. Assess Model Use Cases
 
-Each of these use cases would be useful because...
+The application of the counter application may be used in many domains, such as security, marketing, management.
+The implementation of the application in security context might help to detect any unauthorized intusion, creating the the alarm notifications for further human intervention.
+In case of the marketing context, the app might help to define the flow of people in store sections, being compared with the number of items bought after the human venue.
+The management use case implementation might help to control the activities of the personel in different sections of the building.  
 
-## Assess Effects on End User Needs
+## 4. Assess Effects on End User Needs
 
-Lighting, model accuracy, and camera focal length/image size have different effects on a
-deployed edge model. The potential effects of each of these are as follows...
-
-## Model Research
-
-[This heading is only required if a suitable model was not found after trying out at least three
-different models. However, you may also use this heading to detail how you converted 
-a successful model.]
-
-In investigating potential people counter models, I tried each of the following three models:
-
-- Model 1: [Name]
-  - [Model Source]
-  - I converted the model to an Intermediate Representation with the following arguments...
-  - The model was insufficient for the app because...
-  - I tried to improve the model for the app by...
-  
-- Model 2: [Name]
-  - [Model Source]
-  - I converted the model to an Intermediate Representation with the following arguments...
-  - The model was insufficient for the app because...
-  - I tried to improve the model for the app by...
-
-- Model 3: [Name]
-  - [Model Source]
-  - I converted the model to an Intermediate Representation with the following arguments...
-  - The model was insufficient for the app because...
-  - I tried to improve the model for the app by...
+The ability of the model to detect a human being is dependent on the fame contast (lighting in the chamber)? model accuracy and defined threshould, as ell as from the image dimensions.
+According to the user requirement some additional preprocessing steps might be necessary to adjust the input, so that the output of the model was in optimal limits.
