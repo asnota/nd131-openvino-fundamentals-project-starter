@@ -62,6 +62,13 @@ class Network:
 		# Read the Intermediate Representation as IENetwork
 		self.network = IENetwork(model=model_xml, weights=model_bin)
 		
+		#Check for supported layers
+		supported_layers = self.plugin.query_network(network=self.network, device_name="CPU")
+		unsupported_layers = [l for l in self.network.layers.keys() if l not in supported_layers]
+		if len(unsupported_layers) != 0:
+			print("Unsupportedlayers found: {}".format(unsupported_layers))
+			exit(1)
+		
 		# Load IENetwork to the plugin
 		self.exec_network = self.plugin.load_network(self.network, device)
 		
