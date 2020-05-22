@@ -44,5 +44,5 @@ The management use case implementation might help to control the activities of t
 
 ## 4. Assess Effects on End User Needs
 
-The ability of the model to detect a human being is dependent on the fame contast (lighting in the chamber)? model accuracy and defined threshould, as ell as from the image dimensions.
+The ability of the model to detect a human being is dependent on the frame contast (lighting in the chamber) model accuracy and defined threshould, as well as from the image dimensions.
 According to the user requirement some additional preprocessing steps might be necessary to adjust the input, so that the output of the model was in optimal limits.
