@@ -18,7 +18,9 @@
  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
+# python main.py -pt 0.6 | ffmpeg -v warning -f rawvideo -pixel_format bgr24 -video_size 768x432 -framerate 24 -i - http://0.0.0.0:3004/fac.ffm
 
+# python main.py -m "resources/happy-person.png" -pt 0.6
 
 import os
 import sys
@@ -48,18 +50,13 @@ MQTT_KEEPALIVE_INTERVAL = 60
 
 
 def build_argparser():
-    """
-    Parse command line arguments.
-
-    :return: command line arguments
-    """
     parser = ArgumentParser()
     parser.add_argument("-m", "--model", required=False, type=str,
                         default=SDD_MODEL,
-						help="Path to an xml file with a trained model.")
+                        help="Path to an xml file with a trained model.")
     parser.add_argument("-i", "--input", required=False, type=str,
-                        default=VIDEO_PATH
-						help="Path to image or video file")
+                        default=VIDEO_PATH,
+                        help="Path to image or video file")
     parser.add_argument("-l", "--cpu_extension", required=False, type=str,
                         default=CPU_EXTENSION,
                         help="MKLDNN (CPU)-targeted custom layers."
@@ -79,9 +76,9 @@ def build_argparser():
 def connect_mqtt():
     ### TODO: Connect to the MQTT client ###
     client = mqtt.Client()
-	client.connect(MQTT_HOST, MQTT_PORT, MQTT_KEEPALIVE_INTERVAL)
+    client.connect(MQTT_HOST, MQTT_PORT, MQTT_KEEPALIVE_INTERVAL)
     return client
-	
+
 def ssd_output(frame, result):
     current_count = 0
     for obj in result[0][0]:
@@ -94,17 +91,9 @@ def ssd_output(frame, result):
             current_count = current_count + 1
     return frame, current_count
 
-
 def infer_on_stream(model, args, client):
-    """
-    Initialize the inference network, stream video to network,
-    and output stats and video.
-
-    :param args: Command line arguments parsed by `build_argparser()`
-    :param client: MQTT client
-    :return: None
-    """
-	# Flag for a single image input
+        
+    # Flag for a single image input
     single_image = False
     
     # Initialize variables for person count and start time
@@ -114,124 +103,98 @@ def infer_on_stream(model, args, client):
     
     # Declare global vars for intial frame's width and hight, along with probability threshold
     global initial_width, initial_hight, prob_threshold
-	
-	# Set Probability threshold for detections
+    
+    # Get probarility threshold from args
     prob_threshold = args.prob_threshold
-	
-    # Initialise the class (Inference engine)
+    
+    # Initialise the class
     infer_network = Network()
-	
-    ### TODO: Load the model through `infer_network` into IE ###
-	infer_network.load_model(model, args.device, args.cpu_extension)
-	net_input_shape = infer_network.get_input_shape() # Input shape is  [1, 3, 300, 300]
-
-    ### TODO: Handle the input_stream ###
-	if args.input == 'CAM':
-		input_stream = 0		
-	elif args.input.endswith('.bmp'):
-		singe_image = True
-		input_stream = args.input		
-	else:
-		input_stream = args.input		
-		assert os.path.isfile(input_stream), "Input file does not exist"
-				
-	# Get and open ideo capture
-	cap = cv2.VideoCapture(args.input)
-	
-	if input_stream:
-		cap.open(args.input)
-	
-		#Grab the shape of the input
-		initail_width = int(cap.get(3)) # Video width is 768
-		initial_height = int(cap.get(4)) # Video height is 432
-
+    
+    ### TODO: Load the model through `infer_network` ###
+    infer_network.load_model(model, args.device, args.cpu_extension)
+    net_input_shape = infer_network.get_input_shape() # Input shape is  [1, 3, 300, 300]
+        
+    ### TODO: Handle the input stream ###    
+    # Check the input
+    if args.input == 'CAM':
+        input_stream = 0
+    elif args.input.endswith('.bmp') :
+        single_image = True
+        input_stream = args.input
+    else:
+        input_stream = args.input
+        assert os.path.isfile(args.input), "Input file doesn't exist"
+        
+    # Get and open video capture
+    cap = cv2.VideoCapture(args.input)
+    
+    if input_stream:
+        cap.open(args.input)
+        
+        #Grab the shape of the input
+        initial_width = int(cap.get(3)) # Video width is 768
+        initial_hight = int(cap.get(4)) # Video height is 432
+       
     ### TODO: Loop until stream is over ###
-	while cap.isOpened():
+    while cap.isOpened():       
         ### TODO: Read from the video capture ###
-		flag, frame = cap.read()
-		if not flag:
-			break
-		key_pressed = cv2.waitKey(60)
-
+        flag, frame = cap.read()
+        if not flag:
+            break
+        key_pressed = cv2.waitKey(60)
+        
+       
         ### TODO: Pre-process the image as needed ###
-		p_frame = cv2.resize(frame, (net_input_shape[3], net_input_shape[2]))
-		p_frame = p_frame.transpose((2,0,1))
-		p_frame = p_frame.reshape(1, *p_frame.shape)
-
+        p_frame = cv2.resize(frame, (net_input_shape[3], net_input_shape[2]))        
+        p_frame = p_frame.transpose((2,0,1))       
+        p_frame = p_frame.reshape(1, *p_frame.shape)
+        
         ### TODO: Start asynchronous inference for specified request ###
-		infer_network.exec_net(p_frame)
+        infer_network.exec_net(p_frame)
 
         ### TODO: Wait for the result ###
-		if infer_network.wait() == 0:
-			
+        if infer_network.wait() == 0:
+                                    
             ### TODO: Get the results of the inference request ###
-			result = infer_network.get_output
-			
-			# Apply a function to draw the boxes
-            frame, current_count = ssd_output(frame, result)
-
-            ### TODO: Extract any desired stats from the results ###
-			### TODO: Calculate and send relevant information on ###
-            ### current_count, total_count and duration to the MQTT server ###
-            # A new person appears in a frame
-            if current_count > last_count:
-                
-                # Get a time when a new person appears
-                start_time = time.time()
-                
-                # Update total count of persons 
-                total_count = total_count + current_count - last_count
-                
-                ### Topic "person": key of "total" (from "total" and "count") ###
-                client.publish("person", json.dumps({"total": total_count}))
-
-            # Duration of the person presence
-            if current_count < last_count:
-                # Substract a first moment a new person appeared from current time to get duration of the person presence in a frame
-                duration = int(time.time() - start_time)
-                
-                ### Topic "person/duration": key of "duration" ###
-                client.publish("person/duration", json.dumps({"duration": duration}))
-             
-            ### Topic "person": key of "count" (from "total" and "count") ###
-            client.publish("person", json.dumps({"count": current_count}))
+            result = infer_network.get_output()
             
-            # Update the persons count 
-            last_count = current_count
-			
-        ### TODO: Send the frame to the FFMPEG server ###
-		sys.stdout.buffer.write(frame)
-		sys.stdout.flush()
-		
-		if key_pressed == 27:
-			break
+            # Apply a function to draw the boxes
+            frame, current_count = ssd_output(frame, result)
+            
+            ### TODO: Extract any desired stats from the results ###           
+            ### TODO: Calculate and send relevant information on ###
+            ### current_count, total_count and duration to the MQTT server ###
+            
+            
 
+        ### TODO: Send the frame to the FFMPEG server ###
+        sys.stdout.buffer.write(frame)
+        sys.stdout.flush()
+    
+        if key_pressed == 27:
+            break
+        
         ### TODO: Write an output image if `single_image_mode` ###
-		if single_image:
+        if single_image:
             cv2.imwrite('resources/output_image.png', frame)
-		
-	# Release the capture and destroy any OpenCV windows
+       
+    # Release the capture and destroy any OpenCV windows
     cap.release()
     cv2.destroyAllWindows()    
-    client.disconnect()	
+    client.disconnect()
+        
 
 
 def main():
-    """
-    Load the network and parse the output.
-
-    :return: None
-    """
     # Grab command line args
     args = build_argparser().parse_args()
     
-	# Connect to the MQTT server
+    # Connect to the MQTT server
     client = connect_mqtt()
     
-	# Perform inference on the input stream
-	model = args.model
+    # Perform inference on the input stream
+    model = SDD_MODEL
     infer_on_stream(model, args, client)
-
 
 if __name__ == '__main__':
     main()

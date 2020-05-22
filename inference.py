@@ -36,55 +36,53 @@ class Network:
 
     def __init__(self):
         ### TODO: Initialize any class variables desired ###
-		self.plugin = None
-		self.network = None
-		self.input_blob = None
-		self.output_blob = None
-		self.exec_network = None
-		self.infer_request = None
-		
+        self.plugin = None
+        self.network = None
+        self.input_blob = None
+        self.output_blob = None
+        self.exec_network = None
+        self.infer_request = None
 
     def load_model(self, model, device="CPU", cpu_extention=None):
         ### TODO: Load the model ###
-		model_xml = model
-		model_bin = os.path.splitext(model_xml)[0] + ".bin"
-				
+        model_xml = model
+        model_bin = os.path.splitext(model_xml)[0] + ".bin"
+        
         ### TODO: Check for supported layers ###
-		
-        ### TODO: Add any necessary extensions ###		
-		# Initialize the plugin to get add_extension and load_network methods (the latter is used at loading IENEtwork to the plugin)
-		self.plugin = IECore()
-		
-		if cpu_extention and "CPU" in device:
-			self.plugin.add_extension(cpu_extention, device)
-		
-        ### TODO: Return the loaded inference plugin ###		
-		# Read the Intermediate Representation as IENetwork
-		self.network = IENetwork(model=model_xml, weights=model_bin)
-		
-		#Check for supported layers
-		supported_layers = self.plugin.query_network(network=self.network, device_name="CPU")
-		unsupported_layers = [l for l in self.network.layers.keys() if l not in supported_layers]
-		if len(unsupported_layers) != 0:
-			print("Unsupportedlayers found: {}".format(unsupported_layers))
-			exit(1)
-		
-		# Load IENetwork to the plugin
-		self.exec_network = self.plugin.load_network(self.network, device)
-		
-		# Get the input layers
-		self.input_blob = next(iter(self.network.inputs))
-		self.output_blob = next(iter(self.network.outputs))		
-		return
+        ### TODO: Add any necessary extensions ###
+        # Initialize the plugin to get add_extension and load_network methods (the latter is used at loading IENEtwork to the plugin)
+        self.plugin = IECore()
+        
+        if cpu_extention and "CPU" in device:
+            self.plugin.add_extension(cpu_extention, device)
+        
+        ### TODO: Return the loaded inference plugin ###
+        # Read the Intermediate Representation as IENetwork
+        self.network = IENetwork(model=model_xml, weights=model_bin)
+        
+        #Check for supported layers
+        supported_layers = self.plugin.query_network(network=self.network, device_name="CPU")
+        unsupported_layers = [l for l in self.network.layers.keys() if l not in supported_layers]
+        if len(unsupported_layers) != 0:
+            print("Unsupportedlayers found: {}".format(unsupported_layers))
+            exit(1)
+        
+        # Load IENetwork to the plugin
+        self.exec_network = self.plugin.load_network(self.network, device)
+        
+        # Get the input layers
+        self.input_blob = next(iter(self.network.inputs))
+        self.output_blob = next(iter(self.network.outputs))        
+        return
 
     def get_input_shape(self):
-        ### TODO: Return the shape of the input layer ###				
+        ### TODO: Return the shape of the input layer ###
         return self.network.inputs[self.input_blob].shape
 
     def exec_net(self, image):
         ### TODO: Start an asynchronous request ###
-		self.exec_network.start_async(request_id=0, inputs={self.input_blob: image})
-		return
+        self.exec_network.start_async(request_id=0, inputs={self.input_blob: image})
+        return
 
     def wait(self):
         ### TODO: Wait for the request to be complete. ###
