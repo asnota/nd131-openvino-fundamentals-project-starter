@@ -161,9 +161,28 @@ def infer_on_stream(model, args, client):
             # Apply a function to draw the boxes
             frame, current_count = ssd_output(frame, result)
             
-            ### TODO: Extract any desired stats from the results ###           
-            ### TODO: Calculate and send relevant information on ###
-            ### current_count, total_count and duration to the MQTT server ###
+            # A new person appears in a frame
+            if current_count > last_count:
+
+                # Get a time when a new person appears
+                start_time = time.time()
+
+                # Update total count of persons 
+                total_count = total_count + current_count - last_count
+
+                ### Topic "person": key of "total" (from "total" and "count") ###
+                client.publish("person", json.dumps({"total": total_count}))
+
+            # Duration of the person presence
+            if current_count < last_count:
+                # Substract a first moment a new person appeared from current time to get duration of the person presence in a frame
+                duration = int(time.time() - start_time)
+
+                ### Topic "person/duration": key of "duration" ###
+                client.publish("person/duration", json.dumps({"duration": duration}))
+
+            ### Topic "person": key of "count" (from "total" and "count") ###
+            client.publish("person", json.dumps({"count": current_count}))
             
             
 
