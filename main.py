@@ -126,7 +126,7 @@ def infer_on_stream(model, args, client):
         assert os.path.isfile(args.input), "Input file doesn't exist"
         
     # Get and open video capture
-    cap = cv2.VideoCapture(args.input)
+    cap = cv2.VideoCapture(input_stream)
     
     if input_stream:
         cap.open(args.input)
@@ -183,7 +183,9 @@ def infer_on_stream(model, args, client):
 
             ### Topic "person": key of "count" (from "total" and "count") ###
             client.publish("person", json.dumps({"count": current_count}))
-            
+			
+			# Update the persons count 
+            last_count = current_count            
             
 
         ### TODO: Send the frame to the FFMPEG server ###
