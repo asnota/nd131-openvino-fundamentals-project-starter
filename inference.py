@@ -79,16 +79,16 @@ class Network:
         ### TODO: Return the shape of the input layer ###
         return self.network.inputs[self.input_blob].shape
 
-    def exec_net(self, image):
+    def exec_net(self, request_id, image):
         ### TODO: Start an asynchronous request ###
-        self.exec_network.start_async(request_id=0, inputs={self.input_blob: image})
+        self.exec_network.start_async(request_id=request_id, inputs={self.input_blob: image})
         return
 
-    def wait(self):
+    def wait(self, request_id):
         ### TODO: Wait for the request to be complete. ###
-        status = self.exec_network.requests[0].wait(-1)
+        status = self.exec_network.requests[request_id].wait(-1)
         return status
 
-    def get_output(self):
+    def get_output(self, ):
         ### TODO: Extract and return the output results        
-        return self.exec_network.requests[0].outputs[self.output_blob]
+        return self.exec_network.requests[request_id].outputs[self.output_blob]

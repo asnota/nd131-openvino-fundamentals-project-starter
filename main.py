@@ -159,13 +159,13 @@ def infer_on_stream(model, args, client):
         p_frame = p_frame.reshape(1, *p_frame.shape)
         
         ### TODO: Start asynchronous inference for specified request ###
-        infer_network.exec_net(p_frame)
+        infer_network.exec_net(cur_request_id, p_frame)
 
         ### TODO: Wait for the result ###
-        if infer_network.wait() == 0:
+        if infer_network.wait(cur_request_id) == 0:
                                     
             ### TODO: Get the results of the inference request ###
-            result = infer_network.get_output()
+            result = infer_network.get_output(cur_request_id)
             
             # Apply a function to draw the boxes
             frame, current_count, hist = ssd_output(frame, result, hist)
@@ -194,7 +194,10 @@ def infer_on_stream(model, args, client):
             client.publish("person", json.dumps({"count": current_count}))
 			
 			# Update the persons count 
-            last_count = current_count            
+            last_count = current_count
+
+			# Update request ID 
+            #cur_request_id += 1 # 0 works well for this application		
             
 
         ### TODO: Send the frame to the FFMPEG server ###
