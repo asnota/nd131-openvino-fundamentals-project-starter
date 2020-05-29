@@ -79,7 +79,7 @@ def connect_mqtt():
     client.connect(MQTT_HOST, MQTT_PORT, MQTT_KEEPALIVE_INTERVAL)
     return client
 
-def ssd_output(frame, result):
+def ssd_output(frame, result, hist):
     current_count = 0
     for obj in result[0][0]:
         if obj[2] > prob_threshold:
@@ -89,7 +89,14 @@ def ssd_output(frame, result):
             ymax = int(obj[6] * initial_hight)
             cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 55, 255), 1)
             current_count = current_count + 1
-    return frame, current_count
+			
+			if current_count > 0:
+                hist = 5
+            elif (current_count == 0) and (hist > 0):
+                current_count = 1
+                hist += -1
+				
+    return frame, current_count, hist
 
 def infer_on_stream(model, args, client):
         
@@ -97,6 +104,8 @@ def infer_on_stream(model, args, client):
     single_image = False
     
     # Initialize variables for person count and start time
+	hist = -1
+    cur_request_id = 0
     last_count = 0
     total_count = 0
     start_time = 0
@@ -159,7 +168,7 @@ def infer_on_stream(model, args, client):
             result = infer_network.get_output()
             
             # Apply a function to draw the boxes
-            frame, current_count = ssd_output(frame, result)
+            frame, current_count, hist = ssd_output(frame, result, hist)
             
             # A new person appears in a frame
             if current_count > last_count:
