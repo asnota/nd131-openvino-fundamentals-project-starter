@@ -91,7 +91,7 @@ def ssd_output(frame, result, hist):
             current_count = current_count + 1
 			
 			if current_count > 0:
-                hist = 5
+				hist = 5
             elif (current_count == 0) and (hist > 0):
                 current_count = 1
                 hist += -1

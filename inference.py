@@ -89,6 +89,6 @@ class Network:
         status = self.exec_network.requests[request_id].wait(-1)
         return status
 
-    def get_output(self, ):
+    def get_output(self, request_id):
         ### TODO: Extract and return the output results        
         return self.exec_network.requests[request_id].outputs[self.output_blob]
