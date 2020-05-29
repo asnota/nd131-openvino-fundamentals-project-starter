@@ -214,7 +214,7 @@ def main():
     client = connect_mqtt()
     
     # Perform inference on the input stream
-    model = SDD_MODEL
+    model = args.model
     infer_on_stream(model, args, client)
 
 if __name__ == '__main__':
