@@ -1,4 +1,4 @@
-"""People Counter."""
+""""People Counter."""
 """
  Copyright (c) 2018 Intel Corporation.
  Permission is hereby granted, free of charge, to any person obtaining
@@ -18,7 +18,9 @@
  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
-# python main.py -pt 0.6 | ffmpeg -v warning -f rawvideo -pixel_format bgr24 -video_size 768x432 -framerate 24 -i - http://0.0.0.0:3004/fac.ffm
+# python main.py -pt 0.1 | ffmpeg -v warning -f rawvideo -pixel_format bgr24 -video_size 768x432 -framerate 24 -i - http://0.0.0.0:3004/fac.ffm
+
+# python main.py -i CAM -pt 0.6 | ffmpeg -v warning -f rawvideo -pixel_format bgr24 -video_size 768x432 -framerate 24 -i - http://0.0.0.0:3004/fac.ffm
 
 # python main.py -m "resources/happy-person.png" -pt 0.6
 
@@ -89,13 +91,12 @@ def ssd_output(frame, result, hist):
             ymax = int(obj[6] * initial_hight)
             cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 55, 255), 1)
             current_count = current_count + 1
-			
-			if current_count > 0:
-				hist = 5
+            
+            if current_count > 0:
+                hist = 5
             elif (current_count == 0) and (hist > 0):
                 current_count = 1
                 hist += -1
-				
     return frame, current_count, hist
 
 def infer_on_stream(model, args, client):
@@ -104,7 +105,7 @@ def infer_on_stream(model, args, client):
     single_image = False
     
     # Initialize variables for person count and start time
-	hist = -1
+    hist = -1
     cur_request_id = 0
     last_count = 0
     total_count = 0
@@ -126,7 +127,7 @@ def infer_on_stream(model, args, client):
     ### TODO: Handle the input stream ###    
     # Check the input
     if args.input == 'CAM':
-        input_stream = 0
+        input_stream = 0 # 0 or -1        
     elif args.input.endswith('.bmp') :
         single_image = True
         input_stream = args.input
@@ -134,8 +135,8 @@ def infer_on_stream(model, args, client):
         input_stream = args.input
         assert os.path.isfile(args.input), "Input file doesn't exist"
         
-    # Get and open video capture
-    cap = cv2.VideoCapture(input_stream)
+    # Get and open video capture    
+    cap = cv2.VideoCapture(args.input)
     
     if input_stream:
         cap.open(args.input)
@@ -170,7 +171,10 @@ def infer_on_stream(model, args, client):
             # Apply a function to draw the boxes
             frame, current_count, hist = ssd_output(frame, result, hist)
             
-            # A new person appears in a frame
+            ### TODO: Extract any desired stats from the results ###           
+            ### TODO: Calculate and send relevant information on ###
+            ### current_count, total_count and duration to the MQTT server ###
+                        # A new person appears in a frame
             if current_count > last_count:
 
                 # Get a time when a new person appears
@@ -192,14 +196,13 @@ def infer_on_stream(model, args, client):
 
             ### Topic "person": key of "count" (from "total" and "count") ###
             client.publish("person", json.dumps({"count": current_count}))
-			
-			# Update the persons count 
-            last_count = current_count
-
-			# Update request ID 
-            #cur_request_id += 1 # 0 works well for this application		
             
-
+            # Update the persons count 
+            last_count = current_count
+            
+            # Update request ID 
+            #cur_request_id += 1
+ 
         ### TODO: Send the frame to the FFMPEG server ###
         sys.stdout.buffer.write(frame)
         sys.stdout.flush()
